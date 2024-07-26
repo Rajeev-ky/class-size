@@ -1,0 +1,138 @@
+---
+title: "Class Size"
+author: "Rajeev Kumar Yadav"
+format: html
+execute: 
+  echo: false
+---
+
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+library(gt)
+library(brms)
+library(tidybayes)
+library(gtsummary)
+
+x <- read_csv("data/STAR.csv", show_col_types = FALSE)
+```
+
+<!-- ## Example Preceptor Table -->
+
+<!-- ```{r} -->
+<!-- tibble(ID = c("1", "2", "...", "10", "11", "...", "N"), -->
+<!--        attitude_after_control = c("706*", "565", "...", "654*", "547*", "...", "568"), -->
+<!--        attitude_after_treated = c("638", "620*", "...", "710", "567", "...", "743*"), -->
+<!--        treatment = c("Small", "Regular", "...", "Small", "Small", "...", "Regular")) |> -->
+
+<!--   gt() |> -->
+<!--   tab_header(title = "Preceptor Table") |>  -->
+<!--   cols_label(ID = md("ID"), -->
+<!--              attitude_after_control = md("Score if Regular Class"), -->
+<!--              attitude_after_treated = md("Score if Small Class"), -->
+<!--              treatment = md("Treatment")) |> -->
+<!--   tab_style(cell_borders(sides = "right"), -->
+<!--             location = cells_body(columns = c(ID))) |> -->
+<!--   tab_style(style = cell_text(align = "left", v_align = "middle", size = "large"),  -->
+<!--             locations = cells_column_labels(columns = c(ID))) |> -->
+<!--   cols_align(align = "center", columns = everything()) |> -->
+<!--   cols_align(align = "left", columns = c(ID)) |> -->
+<!--   fmt_markdown(columns = everything()) |> -->
+<!--   tab_spanner(label = "Potential Outcomes", columns = c(attitude_after_control, attitude_after_treated)) |> -->
+<!--   tab_spanner(label = "Covariate", columns = c(treatment)) |>  -->
+<!--   tab_footnote( -->
+<!--     footnote = md("A * indicates a potential outcome which we do not observe."), -->
+<!--     locations = cells_column_spanners(spanners = "Potential Outcomes") -->
+<!--   ) -->
+<!-- ``` -->
+
+
+```{r}
+cs <- x |> 
+  mutate(kinder = factor(classtype, 
+                         levels = c(1, 2, 3), 
+                         labels = c("small", "regular", "regular with aid"))) |> 
+  mutate(race = factor(race,
+                       levels = c(1, 2, 3, 4, 5, 6),
+                       labels = c("white", "black", "asian", "hispanic", "native americans", "others"))) |> filter(kinder %in% c("small", "regular")) |> 
+  select(g4math, kinder) |> drop_na()
+```
+
+
+```{r}
+#| cache: true
+
+fit_cs <- brm(formula = g4math ~ kinder, data = cs, family = gaussian(), silent = 2, refresh = 0, seed = 9)
+```
+
+
+```{r}
+ndata = tibble(kinder = c("small", "regular"))
+```
+
+```{r}
+#| message: false
+#| warning: false
+
+
+fit_cs |> 
+  add_epred_draws(newdata = ndata) |>
+  select(kinder,.epred) |> 
+  ggplot(aes(x = .epred, fill = kinder)) +
+  geom_density(alpha = 0.5) +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  labs(
+    title = "Posterior for Exam Score",
+    subtitle = "Class size has no effect on exam score",
+    x = "Exam Score",
+    fill = "Classroom Size"
+  )
+```
+
+$$
+\text{score}_i = \beta_0 + \beta_1 \text{class\_size}
+$$
+
+
+```{r}
+fit_cs |> tbl_regression()
+```
+
+
+<!-- > What are the units, precisely? -->
+
+<!-- The units are students. Presumably, they are students in K-3 but not necessarily. It depends on what you or your boss/client/colleagues are interested in. Perhaps the Mayor is thinking about shrinking classes throughout all elementary schools. In that case, the Preceptor Table would include students in 4th, 5th (and 6th?) grade. -->
+
+<!-- > What is the moment in time, precisely? -->
+
+<!-- 2025 because the Boston Mayor Wu is considering implementing small classes in our local schools. She wants to know what the causal effect of that change. -->
+
+<!-- Again, there is no right answer. Each student might have their own answer. -->
+
+
+<!-- > What is one reason why validity might not hold? -->
+
+<!-- Validity is about the columns. Do they give the same math tests in Boston today as in Tennessee decades ago? I doubt it. Will the Boston class sizes (both regular and small) be exactly the same as Tennessee's? Again, unlikely. Just because the value of a variable is "small class size" in both the data and the Preceptor Table does not mean that they are the same thing. -->
+
+<!-- > Describe the Population Table in words -->
+
+<!-- Each row is a student/year combination. So, the same student will appear multiple times. Time period must be from 1990 to 2030 or so. Probably includes the whole United States. After all, how could it include Tennessee and Boston but not Wisconsin? Lots of subtleties to discuss! Unclear the grade range of students to include. -->
+
+<!-- But, mostly, the structure of the Population Table is driven by the structure of the Preceptor Table and the data. -->
+
+<!-- > What is one reason why stability might not hold? -->
+
+<!-- Students have very different home lives now, like more electronics. Maybe the effect of small classes is different now. This is a claim that the coefficient in our brm() model might be different in the 1990s than it would be today. -->
+
+<!-- > What is one reason why representativeness might not hold? -->
+
+<!-- Students in Tennessee in 1990 are not a random draw from the population. Neither are students from Boston in 2025! Perhaps small classes have a greater (or lesser) effect on these students. For example, perhaps Boston parents, who are much more highly education on average, are so involved in their children's educational lives that small classes don't really help much. -->
+
+<!-- > What is one reason why unconfoundedness might not hold? -->
+
+<!-- Unconfoundedness means that the treatment assignment is independent of the potential outcomes, when we condition on pre-treatment covariates. A model is confounded if this is not true. Given that they (allegedly) randomly assigned class structure to classes, unconfoundedness should be true. But what if the assignment process was not really random? They provide no details on the process. Is it that the local school system might not have bothered to really randomize the assignment of structure to classes? I bet that people in the local administration really wanted their own children to be in the treatment group! -->
